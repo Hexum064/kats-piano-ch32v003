@@ -26,7 +26,13 @@
 #define MAIN_LOOP_DELAY 50 //mS
 #define POWER_DOWN_SECONDS 60
 #define POWER_DOWN_COUNT (POWER_DOWN_SECONDS * (1000/MAIN_LOOP_DELAY)) //Number of delays per second * number of seconds
+#define LED_SPEED 2
 
+#define LED_COLOR_LEN 16
+// Color correction factors (approximate values for RGB LEDs)
+#define R_CORRECTION 1.0F
+#define G_CORRECTION 0.8F  // LEDs tend to overemphasize green, so we adjust it
+#define B_CORRECTION 0.7F  // LEDs tend to overemphasize blue, so we adjust it
 // #define DEBUG
 
 uint16_t sample_delays[] = {
@@ -49,33 +55,60 @@ uint16_t idx = 0;
 uint8_t read_last = 0;
 uint8_t read_previous = 0;
 uint8_t audio_playing = 0;
-
+uint8_t color_index_start = 0;
 uint32_t pwr_down_counter = 0;
+
+typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} color;
+
+color base[] = {
+    {32, 0, 0},   // Red
+    {32, 16, 0},  // Red-Orange
+    {32, 32, 0},  // Orange-Yellow
+    {16, 32, 0},  // Yellow-Green
+    {0, 32, 0},   // Green
+    {0, 32, 16},  // Green-Cyan
+    {0, 32, 32},  // Cyan
+    {0, 16, 32},  // Cyan-Blue
+    {0, 0, 32},   // Blue
+    {16, 0, 32},  // Blue-Purple
+    {32, 0, 32},  // Purple
+    {32, 0, 16},  // Purple-Red
+    {32, 16, 16}, // Red-Pink
+    {32, 32, 16}, // Pink-Yellow
+    {16, 32, 16}, // Yellow-Green
+    {0, 32, 32}   // Green-Cyan
+};
+
+color leds[LED_COLOR_LEN];
+
+
+// Function to apply the color correction
+uint8_t apply_correction(uint8_t value, float correction) {
+    int corrected_value = value * correction;
+    return (corrected_value > 32) ? 32 : corrected_value; // Clamp to max value of 32
+}
+
+void led_colors_init()
+{
+    // Apply color correction to each color in the rainbow
+    for (int i = 0; i < 16; i++) {
+        leds[i].r = apply_correction(base[i].r, R_CORRECTION);
+        leds[i].g = apply_correction(base[i].g, G_CORRECTION);
+        leds[i].b = apply_correction(base[i].b, B_CORRECTION);
+    }    
+}
 
 void gpios_init()
 {
 	funPinMode(PWR_OFF, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP);
     funDigitalWrite(PWR_OFF, FUN_HIGH);
     funPinMode(LEDS, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); 
-	// funPinMode(LED_D, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // D LED
-    // funPinMode(LED_E, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // E LED
-	// funPinMode(LED_F, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // F LED
-	// funPinMode(LED_I, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // I LED
-	// funPinMode(LED_U, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // U LED
 	funPinMode(PWM_OUT, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF); //PWM Pin
     funPinMode(AUDIO_EN, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP);
-	// funPinMode(LED_0, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
-	// funPinMode(LED_1, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
-	// funPinMode(LED_2, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
-	// funPinMode(LED_3, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
-	// funPinMode(LED_4, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
-	// funPinMode(LED_5, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
-	// funPinMode(LED_6, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
-	// funPinMode(LED_7, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
-
-	// PC4 is T1CH4, 10MHz Output alt func, push-pull
-	// GPIOA->CFGLR &= ~(0xf << (4 * PWM_OUT));
-	// GPIOA->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF) << (4 * PWM_OUT);
 }
 
 void audio_start(uint8_t freq_index)
@@ -235,33 +268,36 @@ void leds_send_one(uint8_t r, uint8_t g, uint8_t b)
     }        
 }
 
-void leds_update(uint8_t index)
+void leds_highlight_note(uint8_t index)
 {
+    color col;
+
+    for (uint8_t i = 0; i < 13; i++)
+    {
+        col = leds[(i + color_index_start) % LED_COLOR_LEN];
+        if (i == index)
+        {
+            col.r = 64;
+            col.g = 64;
+            col.b = 64;
+        }
+        
+        leds_send_one(col.r, col.g, col.b);
+    }
 
 }
 
-void leds_all_off()
+void cycle_leds()
 {
-}
+    color col;
 
-void led_test()
-{
-    leds_send_one(64, 0 ,0);
-    leds_send_one(0, 64 ,0);
-    leds_send_one(0, 0 ,64);
-    leds_send_one(64, 0 ,64);
-    leds_send_one(64, 0 ,0);
-    leds_send_one(0, 64 ,0);
-    leds_send_one(0, 0 ,64);    
-    leds_send_one(64, 0 ,0);
-    leds_send_one(0, 64 ,0);
-    leds_send_one(0, 0 ,64);    
-    leds_send_one(64, 0 ,0);
-    leds_send_one(0, 64 ,0);
-    leds_send_one(0, 0 ,64);
-    leds_send_one(64, 0 ,0);
-    leds_send_one(0, 64 ,0);
-    leds_send_one(0, 0 ,64);    
+    for (uint8_t i = 0; i < 13; i++)
+    {
+        col = leds[(i + color_index_start) % LED_COLOR_LEN];
+        leds_send_one(col.r, col.g, col.b);
+    }
+
+    color_index_start++;
 }
 
 void read_handler()
@@ -278,7 +314,6 @@ void read_handler()
 #endif
             read_previous = 0;
             audio_stop();
-            leds_all_off();
         }
         return;
     }
@@ -342,8 +377,9 @@ void read_handler()
         printf("Changing audio. Freq: %d\n", freq_index);
 #endif
 
-    leds_update(freq_index);
+    
     audio_stop();    
+    leds_highlight_note(freq_index);
     audio_start(freq_index);
     read_previous = read_last;
 }
@@ -351,6 +387,7 @@ void read_handler()
 int main() 
 {
     SystemInit();
+    led_colors_init();
 
     	// Enable GPIOs and timers
 	RCC->APB2PCENR |= RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOD | RCC_APB2Periph_TIM1 | RCC_APB2Periph_ADC1;
@@ -373,7 +410,7 @@ int main()
 #endif
 
     uint8_t i = 0;
-
+    uint8_t led_speed_cnt = 0;
 
     
 
@@ -417,7 +454,10 @@ int main()
         previous_touched = read_last;
 #endif        
         read_handler();
-        led_test();
+
+        if (!(led_speed_cnt++ % LED_SPEED) && !audio_playing) {
+            cycle_leds();
+        }
 
         if (pwr_down_counter++ > POWER_DOWN_COUNT) {            
              funDigitalWrite(PWR_OFF, FUN_LOW);
