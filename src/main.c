@@ -12,15 +12,19 @@
 #define TOUCH_6     PD6
 #define TOUCH_7     PD4
 
-#define RST         PD7
-#define PWM_OUT     PC3
+#define PWR_OFF     PC3
+#define PWM_OUT     PD0  //T1CH1N
 #define AUDIO_EN    PC6
 #define LEDS        PC5
 #define SWIO        PD1
 
-#define SAMPLE_DELAY 6000		// 48MHz / 6000 = 8KHz
+
 #define TOUCH_THRESHHOLD 7000	// Has to be over this to register as a touch
 #define RELEASE_THRESHHOLD 5750 // Has to be under this to register as a release
+
+#define TOUCH_ITERATIONS 3
+
+// #define DEBUG
 
 uint16_t sample_delays[] = {
     8533,
@@ -41,17 +45,20 @@ uint16_t sample_delays[] = {
 uint16_t idx = 0;
 uint8_t read_last = 0;
 uint8_t read_previous = 0;
+uint8_t audio_playing = 0;
 
 void gpios_init()
 {
-	
+	funPinMode(PWR_OFF, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP);
+    funDigitalWrite(PWR_OFF, FUN_HIGH);
+    funPinMode(LEDS, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); 
 	// funPinMode(LED_D, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // D LED
     // funPinMode(LED_E, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // E LED
 	// funPinMode(LED_F, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // F LED
 	// funPinMode(LED_I, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // I LED
 	// funPinMode(LED_U, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // U LED
-	funPinMode(PWM_OUT, GPIO_Speed_50MHz | GPIO_CNF_OUT_PP_AF); //PWM Pin
-    funPinMode(AUDIO_EN, GPIO_Speed_50MHz | GPIO_CNF_OUT_PP);
+	funPinMode(PWM_OUT, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF); //PWM Pin
+    funPinMode(AUDIO_EN, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP);
 	// funPinMode(LED_0, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
 	// funPinMode(LED_1, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
 	// funPinMode(LED_2, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP); // display LED
@@ -69,14 +76,19 @@ void gpios_init()
 void audio_start(uint8_t freq_index)
 {	
 	idx = 0;
-	// turn offf audio disable pin
+    audio_playing = 1;
+	// turn off audio disable pin
 	funDigitalWrite(AUDIO_EN, FUN_LOW);
+
+#ifdef DEBUG
+            printf("audio start: freq %d\n", sample_delays[freq_index]);
+#endif
 
     TIM2->ATRLR = sample_delays[freq_index];
 
 	// Enable TIM1
 	TIM1->CTLR1 |= TIM_CEN;
-
+    // Enable TIM2
 	TIM2->CTLR1 |= TIM_CEN;
 }
 
@@ -88,10 +100,15 @@ void audio_stop()
 	TIM1->CTLR1 &= ~TIM_CEN;
 	TIM2->CTLR1 &= ~TIM_CEN;
     idx = 0;
+    audio_playing = 0;
+    TIM1->CH1CVR = 255;
 }
 
 void audio_update()
 {
+// #ifdef DEBUG
+//         printf("%d\n", idx);
+// #endif    
 	if (idx >= AUDIO_LEN)
 	{
 
@@ -101,7 +118,7 @@ void audio_update()
 	{
 		TIM2->INTFR = TIM_CC1IF;
 
-			TIM1->CH1CVR = note_audio[idx];
+        TIM1->CH1CVR = note_audio[idx];
 		
 	}
 }
@@ -122,13 +139,6 @@ void pwm_init()
 	// Reset TIM1 to init all regs
 	RCC->APB2PRSTR |= RCC_APB2Periph_TIM1;
 	RCC->APB2PRSTR &= ~RCC_APB2Periph_TIM1;
-
-	// Reset TIM2 to init all regs
-	RCC->APB1PRSTR |= RCC_APB1Periph_TIM2;
-	RCC->APB1PRSTR &= ~RCC_APB1Periph_TIM2;
-
-	// CTLR1: default is up, events generated, edge align
-	// SMCFGR: default clk input is CK_INT
 
 	// Prescaler
 	TIM1->PSC = 0x0000;
@@ -161,6 +171,11 @@ void pwm_init()
 
 void sample_timer_init()
 {
+    	// Reset TIM2 to init all regs
+	RCC->APB1PRSTR |= RCC_APB1Periph_TIM2;
+	RCC->APB1PRSTR &= ~RCC_APB1Periph_TIM2;
+
+
 	TIM2->CTLR1 = TIM_ARPE;
 
 	TIM2->PSC = 0x0000;
@@ -176,6 +191,41 @@ void sample_timer_init()
 	TIM2->CTLR1 &= ~TIM_CEN;
 }
 
+void leds_send_one(uint8_t r, uint8_t g, uint8_t b)
+{
+    uint8_t i;
+
+    i = 8;
+    while(i-- > 0)
+    {
+        funDigitalWrite(LEDS, FUN_HIGH);
+        Delay_Tiny(2);
+        funDigitalWrite(LEDS, (g >> i) & 0x01)
+        Delay_Tiny(2);
+        funDigitalWrite(LEDS, FUN_LOW);
+    }
+
+    i = 8;
+    while(i-- > 0)
+    {
+        funDigitalWrite(LEDS, FUN_HIGH);
+        Delay_Tiny(2);
+        funDigitalWrite(LEDS, (r >> i) & 0x01)
+        Delay_Tiny(2);
+        funDigitalWrite(LEDS, FUN_LOW);
+    }
+    
+    i = 8;   
+    while(i-- > 0)
+    {
+        funDigitalWrite(LEDS, FUN_HIGH);
+        Delay_Tiny(2);
+        funDigitalWrite(LEDS, (b >> i) & 0x01)
+        Delay_Tiny(2);
+        funDigitalWrite(LEDS, FUN_LOW);
+    }        
+}
+
 void leds_update(uint8_t index)
 {
 
@@ -185,18 +235,55 @@ void leds_all_off()
 {
 }
 
+void led_test()
+{
+    leds_send_one(64, 0 ,0);
+    leds_send_one(0, 64 ,0);
+    leds_send_one(0, 0 ,64);
+    leds_send_one(64, 0 ,64);
+    leds_send_one(64, 0 ,0);
+    leds_send_one(0, 64 ,0);
+    leds_send_one(0, 0 ,64);    
+    leds_send_one(64, 0 ,0);
+    leds_send_one(0, 64 ,0);
+    leds_send_one(0, 0 ,64);    
+    leds_send_one(64, 0 ,0);
+    leds_send_one(0, 64 ,0);
+    leds_send_one(0, 0 ,64);
+    leds_send_one(64, 0 ,0);
+    leds_send_one(0, 64 ,0);
+    leds_send_one(0, 0 ,64);    
+}
+
 void read_handler()
 {
     uint8_t freq_index = 0;
 
     if (!(read_last))
     {
-        audio_stop();
-        leds_all_off();
+        
+        if (audio_playing)
+        {
+#ifdef DEBUG
+            printf("audio stop\n");
+#endif
+            read_previous = 0;
+            audio_stop();
+            leds_all_off();
+        }
         return;
     }
 
-    switch (read_previous ^ read_last)
+    if (read_last == read_previous || audio_playing)
+    {
+        return;
+    }
+
+#ifdef DEBUG
+        printf("last: %d, prev: %d, touch xor %d\n", read_last, read_previous, (read_previous ^ read_last));
+#endif
+
+    switch (read_last)
     {
         case 0:
         default:
@@ -241,6 +328,11 @@ void read_handler()
             freq_index = 12;
             break;                            
     }
+
+#ifdef DEBUG
+        printf("Changing audio. Freq: %d\n", freq_index);
+#endif
+
     leds_update(freq_index);
     audio_stop();    
     audio_start(freq_index);
@@ -261,31 +353,42 @@ int main()
 
 	InitTouchADC();
     
+    audio_stop();
+
+    PWR->CTLR |= PWR_CTLR_PDDS;
+
     uint32_t read;
 
+#ifdef DEBUG
+    uint32_t previous_touched = 0;
+#endif
+
     uint8_t i = 0;
+
+
+    uint32_t count = 0;
+
     while(1)
-    {
-        // printf("Reading... ");
+    {        
+         Delay_Ms(50);
 
         read_last = 0;
         i = 0;
-        read = ReadTouchPin(GPIOD, 4, 7, 3);
-        // printf("A7: %d\n", read);
+        read = ReadTouchPin(GPIOD, 4, 7, TOUCH_ITERATIONS);        
         read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A7
-        read = ReadTouchPin(GPIOD, 6, 6, 3);
+        read = ReadTouchPin(GPIOD, 6, 6, TOUCH_ITERATIONS);
         read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A6
-        read = ReadTouchPin(GPIOD, 5, 5, 3) ;
+        read = ReadTouchPin(GPIOD, 5, 5, TOUCH_ITERATIONS) ;
         read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A5
-        read =  ReadTouchPin(GPIOD, 3, 4, 3);
+        read =  ReadTouchPin(GPIOD, 3, 4, TOUCH_ITERATIONS);
         read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A4
-        read =  ReadTouchPin(GPIOD, 2, 3, 3);
+        read =  ReadTouchPin(GPIOD, 2, 3, TOUCH_ITERATIONS);
         read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A3   
-        read =  ReadTouchPin(GPIOC, 4, 2, 3);
+        read =  ReadTouchPin(GPIOC, 4, 2, TOUCH_ITERATIONS);
         read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A2
-        read =  ReadTouchPin(GPIOA, 1, 1, 3);
+        read =  ReadTouchPin(GPIOA, 1, 1, TOUCH_ITERATIONS);
         read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A1
-        read =  ReadTouchPin(GPIOA, 2, 0, 3);        
+        read =  ReadTouchPin(GPIOA, 2, 0, TOUCH_ITERATIONS);        
         read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A0
 
 #ifdef DEBUG
@@ -305,10 +408,16 @@ int main()
         previous_touched = read_last;
 #endif        
         read_handler();
+        led_test();
+
+        if (count++ > 200) {
+            // __WFE();
+             funDigitalWrite(PWR_OFF, FUN_LOW);
+        }
 
         // Delay_Ms(250);
         // funDigitalWrite(LED_D, FUN_HIGH);
         // Delay_Ms(250);        
-        Delay_Ms(50);
+       
     }
 }
