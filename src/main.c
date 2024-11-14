@@ -23,6 +23,9 @@
 #define RELEASE_THRESHHOLD 5750 // Has to be under this to register as a release
 
 #define TOUCH_ITERATIONS 3
+#define MAIN_LOOP_DELAY 50 //mS
+#define POWER_DOWN_SECONDS 60
+#define POWER_DOWN_COUNT (POWER_DOWN_SECONDS * (1000/MAIN_LOOP_DELAY)) //Number of delays per second * number of seconds
 
 // #define DEBUG
 
@@ -46,6 +49,8 @@ uint16_t idx = 0;
 uint8_t read_last = 0;
 uint8_t read_previous = 0;
 uint8_t audio_playing = 0;
+
+uint32_t pwr_down_counter = 0;
 
 void gpios_init()
 {
@@ -77,6 +82,7 @@ void audio_start(uint8_t freq_index)
 {	
 	idx = 0;
     audio_playing = 1;
+    pwr_down_counter = 0;
 	// turn off audio disable pin
 	funDigitalWrite(AUDIO_EN, FUN_LOW);
 
@@ -102,16 +108,19 @@ void audio_stop()
     idx = 0;
     audio_playing = 0;
     TIM1->CH1CVR = 255;
+    pwr_down_counter = 0;
 }
 
 void audio_update()
 {
 // #ifdef DEBUG
 //         printf("%d\n", idx);
-// #endif    
+// #endif
+    //Don't let the power down happen while in the audio loop
+    pwr_down_counter = 0;
 	if (idx >= AUDIO_LEN)
 	{
-
+        
 		idx = LOOP_START;
 	}
 	else
@@ -366,11 +375,11 @@ int main()
     uint8_t i = 0;
 
 
-    uint32_t count = 0;
+    
 
     while(1)
     {        
-         Delay_Ms(50);
+         Delay_Ms(MAIN_LOOP_DELAY);
 
         read_last = 0;
         i = 0;
@@ -410,14 +419,9 @@ int main()
         read_handler();
         led_test();
 
-        if (count++ > 200) {
-            // __WFE();
+        if (pwr_down_counter++ > POWER_DOWN_COUNT) {            
              funDigitalWrite(PWR_OFF, FUN_LOW);
         }
-
-        // Delay_Ms(250);
-        // funDigitalWrite(LED_D, FUN_HIGH);
-        // Delay_Ms(250);        
        
     }
 }
