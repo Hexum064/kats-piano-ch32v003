@@ -65,22 +65,22 @@ typedef struct {
 } color;
 
 color base[] = {
-    {32, 0, 0},   // Red
-    {32, 16, 0},  // Red-Orange
-    {32, 32, 0},  // Orange-Yellow
-    {16, 32, 0},  // Yellow-Green
-    {0, 32, 0},   // Green
-    {0, 32, 16},  // Green-Cyan
-    {0, 32, 32},  // Cyan
-    {0, 16, 32},  // Cyan-Blue
-    {0, 0, 32},   // Blue
-    {16, 0, 32},  // Blue-Purple
-    {32, 0, 32},  // Purple
-    {32, 0, 16},  // Purple-Red
-    {32, 16, 16}, // Red-Pink
-    {32, 32, 16}, // Pink-Yellow
-    {16, 32, 16}, // Yellow-Green
-    {0, 32, 32}   // Green-Cyan
+    {24, 0, 0},   // Red
+    {24, 12, 0},  // Red-Orange
+    {24, 24, 0},  // Orange-Yellow
+    {12, 24, 0},  // Yellow-Green
+    {0, 24, 0},   // Green
+    {0, 24, 12},  // Green-Cyan
+    {0, 24, 24},  // Cyan
+    {0, 12, 24},  // Cyan-Blue
+    {0, 0, 24},   // Blue
+    {12, 0, 24},  // Blue-Purple
+    {24, 0, 24},  // Purple
+    {24, 0, 12},  // Purple-Red
+    {24, 12, 12}, // Red-Pink
+    {24, 24, 12}, // Pink-Yellow
+    {12, 24, 12}, // Yellow-Green
+    {0, 24, 24}   // Green-Cyan
 };
 
 color leds[LED_COLOR_LEN];
@@ -277,9 +277,9 @@ void leds_highlight_note(uint8_t index)
         col = leds[(i + color_index_start) % LED_COLOR_LEN];
         if (i == index)
         {
-            col.r = 64;
-            col.g = 64;
-            col.b = 64;
+            col.r = 128;
+            col.g = 128;
+            col.b = 128;
         }
         
         leds_send_one(col.r, col.g, col.b);
@@ -420,22 +420,23 @@ int main()
 
         read_last = 0;
         i = 0;
-        read = ReadTouchPin(GPIOD, 4, 7, TOUCH_ITERATIONS);        
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A7
-        read = ReadTouchPin(GPIOD, 6, 6, TOUCH_ITERATIONS);
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A6
-        read = ReadTouchPin(GPIOD, 5, 5, TOUCH_ITERATIONS) ;
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A5
-        read =  ReadTouchPin(GPIOD, 3, 4, TOUCH_ITERATIONS);
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A4
-        read =  ReadTouchPin(GPIOD, 2, 3, TOUCH_ITERATIONS);
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A3   
-        read =  ReadTouchPin(GPIOC, 4, 2, TOUCH_ITERATIONS);
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A2
-        read =  ReadTouchPin(GPIOA, 1, 1, TOUCH_ITERATIONS);
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A1
-        read =  ReadTouchPin(GPIOA, 2, 0, TOUCH_ITERATIONS);        
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); //A0
+        read =  ReadTouchPin(GPIOD, 2, 3, TOUCH_ITERATIONS);    //A3  
+        read_last  |= ((read > 7000 ? 1 : 0) << (i++));  
+        read =  ReadTouchPin(GPIOD, 3, 4, TOUCH_ITERATIONS);    //A4
+        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read = ReadTouchPin(GPIOD, 4, 7, TOUCH_ITERATIONS);     //A7     
+        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read = ReadTouchPin(GPIOD, 5, 5, TOUCH_ITERATIONS);     //A5
+        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read = ReadTouchPin(GPIOD, 6, 6, TOUCH_ITERATIONS);     //A6
+        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read =  ReadTouchPin(GPIOA, 1, 1, TOUCH_ITERATIONS);    //A1
+        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read =  ReadTouchPin(GPIOA, 2, 0, TOUCH_ITERATIONS);    //A0       
+        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read =  ReadTouchPin(GPIOC, 4, 2, TOUCH_ITERATIONS);    //A2
+        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+
 
 #ifdef DEBUG
         if (previous_touched != read_last)
