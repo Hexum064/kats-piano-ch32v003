@@ -399,7 +399,7 @@ void touch_get_base()
     touch_val +=  ReadTouchPin(GPIOA, 2, 0, TOUCH_ITERATIONS);    //A0               
     touch_val +=  ReadTouchPin(GPIOC, 4, 2, TOUCH_ITERATIONS);    //A2    
 
-    touch_base = touch_val / 7;
+    touch_base = touch_val / 8;
 }
 
 int main() 
