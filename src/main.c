@@ -21,6 +21,7 @@
 
 #define TOUCH_THRESHHOLD 7000	// Has to be over this to register as a touch
 #define RELEASE_THRESHHOLD 5750 // Has to be under this to register as a release
+#define TOUCH_DELTA 500
 
 #define TOUCH_ITERATIONS 3
 #define MAIN_LOOP_DELAY 50 //mS
@@ -57,6 +58,7 @@ uint8_t read_previous = 0;
 uint8_t audio_playing = 0;
 uint8_t color_index_start = 0;
 uint32_t pwr_down_counter = 0;
+uint32_t touch_base = 0;
 
 typedef struct {
     uint8_t r;
@@ -384,6 +386,22 @@ void read_handler()
     read_previous = read_last;
 }
 
+void touch_get_base() 
+{
+    uint32_t touch_val = 0;
+
+    touch_val +=  ReadTouchPin(GPIOD, 2, 3, TOUCH_ITERATIONS);    //A3          
+    touch_val +=  ReadTouchPin(GPIOD, 3, 4, TOUCH_ITERATIONS);    //A4        
+    touch_val += ReadTouchPin(GPIOD, 4, 7, TOUCH_ITERATIONS);     //A7             
+    touch_val += ReadTouchPin(GPIOD, 5, 5, TOUCH_ITERATIONS);     //A5        
+    touch_val += ReadTouchPin(GPIOD, 6, 6, TOUCH_ITERATIONS);     //A6        
+    touch_val +=  ReadTouchPin(GPIOA, 1, 1, TOUCH_ITERATIONS);    //A1        
+    touch_val +=  ReadTouchPin(GPIOA, 2, 0, TOUCH_ITERATIONS);    //A0               
+    touch_val +=  ReadTouchPin(GPIOC, 4, 2, TOUCH_ITERATIONS);    //A2    
+
+    touch_base = touch_val / 7;
+}
+
 int main() 
 {
     SystemInit();
@@ -412,7 +430,7 @@ int main()
     uint8_t i = 0;
     uint8_t led_speed_cnt = 0;
 
-    
+    touch_get_base();
 
     while(1)
     {        
@@ -421,21 +439,21 @@ int main()
         read_last = 0;
         i = 0;
         read =  ReadTouchPin(GPIOD, 2, 3, TOUCH_ITERATIONS);    //A3  
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++));  
+        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++));  
         read =  ReadTouchPin(GPIOD, 3, 4, TOUCH_ITERATIONS);    //A4
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
         read = ReadTouchPin(GPIOD, 4, 7, TOUCH_ITERATIONS);     //A7     
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
         read = ReadTouchPin(GPIOD, 5, 5, TOUCH_ITERATIONS);     //A5
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
         read = ReadTouchPin(GPIOD, 6, 6, TOUCH_ITERATIONS);     //A6
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
         read =  ReadTouchPin(GPIOA, 1, 1, TOUCH_ITERATIONS);    //A1
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
         read =  ReadTouchPin(GPIOA, 2, 0, TOUCH_ITERATIONS);    //A0       
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
         read =  ReadTouchPin(GPIOC, 4, 2, TOUCH_ITERATIONS);    //A2
-        read_last  |= ((read > 7000 ? 1 : 0) << (i++)); 
+        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
 
 
 #ifdef DEBUG
