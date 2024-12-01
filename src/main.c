@@ -21,7 +21,7 @@
 
 #define TOUCH_THRESHHOLD 7000	// Has to be over this to register as a touch
 #define RELEASE_THRESHHOLD 5750 // Has to be under this to register as a release
-#define TOUCH_DELTA 500
+#define TOUCH_DELTA 250
 
 #define TOUCH_ITERATIONS 3
 #define MAIN_LOOP_DELAY 50 //mS
