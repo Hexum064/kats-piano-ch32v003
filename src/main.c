@@ -454,7 +454,7 @@ int main()
         read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
         read =  ReadTouchPin(GPIOC, 4, 2, TOUCH_ITERATIONS);    //A2
         read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
-
+printf("read: %d\n", read);
 
 #ifdef DEBUG
         if (previous_touched != read_last)
