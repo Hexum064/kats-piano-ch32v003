@@ -21,7 +21,8 @@
 
 #define TOUCH_THRESHHOLD 7000	// Has to be over this to register as a touch
 #define RELEASE_THRESHHOLD 5750 // Has to be under this to register as a release
-#define TOUCH_DELTA 250
+#define TOUCH_DELTA 1700
+#define TOUCH_DELTA_SHARP 1200
 
 #define TOUCH_ITERATIONS 3
 #define MAIN_LOOP_DELAY 50 //mS
@@ -29,6 +30,7 @@
 #define POWER_DOWN_COUNT (POWER_DOWN_SECONDS * (1000/MAIN_LOOP_DELAY)) //Number of delays per second * number of seconds
 #define LED_SPEED 2
 
+#define LED_COUNT 13
 #define LED_COLOR_LEN 16
 // Color correction factors (approximate values for RGB LEDs)
 #define R_CORRECTION 1.0F
@@ -58,7 +60,7 @@ uint8_t read_previous = 0;
 uint8_t audio_playing = 0;
 uint8_t color_index_start = 0;
 uint32_t pwr_down_counter = 0;
-uint32_t touch_base = 0;
+uint32_t touch_base[8] = {0};
 
 typedef struct {
     uint8_t r;
@@ -274,7 +276,7 @@ void leds_highlight_note(uint8_t index)
 {
     color col;
 
-    for (uint8_t i = 0; i < 13; i++)
+    for (uint8_t i = 0; i < LED_COUNT; i++)
     {
         col = leds[(i + color_index_start) % LED_COLOR_LEN];
         if (i == index)
@@ -293,13 +295,22 @@ void cycle_leds()
 {
     color col;
 
-    for (uint8_t i = 0; i < 13; i++)
+    for (uint8_t i = 0; i < LED_COUNT; i++)
     {
         col = leds[(i + color_index_start) % LED_COLOR_LEN];
         leds_send_one(col.r, col.g, col.b);
     }
 
     color_index_start++;
+}
+
+void leds_all_off()
+{
+    for (uint8_t i = 0; i < LED_COUNT; i++)
+    {
+        leds_send_one(0, 0, 0);
+    }
+    
 }
 
 void read_handler()
@@ -320,7 +331,7 @@ void read_handler()
         return;
     }
 
-    if (read_last == read_previous || audio_playing)
+    if (read_last == read_previous) // || audio_playing)
     {
         return;
     }
@@ -386,21 +397,57 @@ void read_handler()
     read_previous = read_last;
 }
 
+typedef struct 
+{
+    GPIO_TypeDef * port;
+    int pin;
+    int adc;
+} s_touch_info;
+
+s_touch_info touch_info[8] = {
+    {GPIOD, 2, 3},
+    {GPIOD, 3, 4},
+    {GPIOD, 4, 7},
+    {GPIOD, 5, 5},
+    {GPIOD, 6, 6},
+    {GPIOA, 1, 1},
+    {GPIOA, 2, 0},
+    {GPIOC, 4, 2}
+};
+
+
+uint32_t touch_read(s_touch_info info)
+{
+    return  ReadTouchPin(info.port, info.pin, info.adc, TOUCH_ITERATIONS);
+}
+
+uint8_t touch_read_sharp_bits(uint8_t index0, uint8_t index1)
+{
+    uint32_t read;
+    uint32_t read2;
+    
+    read =  touch_read(touch_info[index0]); 
+    read2 =  touch_read(touch_info[index1]);
+
+    if (read > touch_base[index0] && read - touch_base[index0] > TOUCH_DELTA_SHARP 
+    && read2 > touch_base[index1] && read2 - touch_base[index1] > TOUCH_DELTA_SHARP ) 
+    {
+        return (1 << index0) | (1 << index1);
+    }
+
+    return 0;
+}
+
 void touch_get_base() 
 {
     uint32_t touch_val = 0;
-
-    touch_val +=  ReadTouchPin(GPIOD, 2, 3, TOUCH_ITERATIONS);    //A3          
-    touch_val +=  ReadTouchPin(GPIOD, 3, 4, TOUCH_ITERATIONS);    //A4        
-    touch_val += ReadTouchPin(GPIOD, 4, 7, TOUCH_ITERATIONS);     //A7             
-    touch_val += ReadTouchPin(GPIOD, 5, 5, TOUCH_ITERATIONS);     //A5        
-    touch_val += ReadTouchPin(GPIOD, 6, 6, TOUCH_ITERATIONS);     //A6        
-    touch_val +=  ReadTouchPin(GPIOA, 1, 1, TOUCH_ITERATIONS);    //A1        
-    touch_val +=  ReadTouchPin(GPIOA, 2, 0, TOUCH_ITERATIONS);    //A0               
-    touch_val +=  ReadTouchPin(GPIOC, 4, 2, TOUCH_ITERATIONS);    //A2    
-
-    touch_base = touch_val / 8;
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        touch_base[i] = touch_read(touch_info[i]);
+    }
+    
 }
+
 
 int main() 
 {
@@ -422,12 +469,13 @@ int main()
     PWR->CTLR |= PWR_CTLR_PDDS;
 
     uint32_t read;
+    
 
 #ifdef DEBUG
     uint32_t previous_touched = 0;
 #endif
 
-    uint8_t i = 0;
+    uint8_t bit = 0;
     uint8_t led_speed_cnt = 0;
 
     touch_get_base();
@@ -435,31 +483,42 @@ int main()
     while(1)
     {        
          Delay_Ms(MAIN_LOOP_DELAY);
+    // printf("bases: %d, %d, %d, %d, %d, %d, %d, %d\n\t", touch_base[0],
+    // touch_base[1],
+    // touch_base[2],
+    // touch_base[3],
+    // touch_base[4],
+    // touch_base[5],
+    // touch_base[6],
+    // touch_base[7]);
+         read_last = 0;
+        
 
-        read_last = 0;
-        i = 0;
-        read =  ReadTouchPin(GPIOD, 2, 3, TOUCH_ITERATIONS);    //A3  
-        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++));  
-        read =  ReadTouchPin(GPIOD, 3, 4, TOUCH_ITERATIONS);    //A4
-        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
-        read = ReadTouchPin(GPIOD, 4, 7, TOUCH_ITERATIONS);     //A7     
-        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
-        read = ReadTouchPin(GPIOD, 5, 5, TOUCH_ITERATIONS);     //A5
-        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
-        read = ReadTouchPin(GPIOD, 6, 6, TOUCH_ITERATIONS);     //A6
-        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
-        read =  ReadTouchPin(GPIOA, 1, 1, TOUCH_ITERATIONS);    //A1
-        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
-        read =  ReadTouchPin(GPIOA, 2, 0, TOUCH_ITERATIONS);    //A0       
-        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
-        read =  ReadTouchPin(GPIOC, 4, 2, TOUCH_ITERATIONS);    //A2
-        read_last  |= ((read - touch_base > TOUCH_DELTA ? 1 : 0) << (i++)); 
-printf("read: %d\n", read);
+        
+
+        read_last |= touch_read_sharp_bits(0, 1); //C#
+        read_last |= touch_read_sharp_bits(1, 2); //D#
+        read_last |= touch_read_sharp_bits(3, 4); //F#
+        read_last |= touch_read_sharp_bits(4, 5); //G#
+        read_last |= touch_read_sharp_bits(5, 6); //A#
+
+      
+        for (uint8_t i = 0; i < 8; i++)
+        {
+            read =  touch_read(touch_info[i]);   //A3  
+            bit = ((read > touch_base[i] && (read - touch_base[i]) > TOUCH_DELTA) ? 1 : 0);
+            // printf("%d:%d, ", read, bit);
+            read_last  |= (bit << i);  
+        }
+        
+#ifdef DEBUG
+        printf("read: %d, base: %d, diff, %d\n", read, touch_base, read - touch_base);
+#endif
 
 #ifdef DEBUG
         if (previous_touched != read_last)
         {
-            printf ("7: %s, 6: %s, 5: %s, 4: %s, 3: %s, 2: %s, 1: %s, 0: %s\n", 
+            printf ("c: %s, d: %s, e: %s, f: %s, g: %s, a: %s, b: %s, c: %s\n", 
             (read_last & 0x01) ? "X" : "_",
             (read_last & 0x02) ? "X" : "_",
             (read_last & 0x04) ? "X" : "_",
@@ -468,9 +527,9 @@ printf("read: %d\n", read);
             (read_last & 0x20) ? "X" : "_",
             (read_last & 0x40) ? "X" : "_",
             (read_last & 0x80) ? "X" : "_");
-            
+            previous_touched = read_last;
         }
-        previous_touched = read_last;
+        
 #endif        
         read_handler();
 
@@ -478,8 +537,9 @@ printf("read: %d\n", read);
             cycle_leds();
         }
 
-        if (pwr_down_counter++ > POWER_DOWN_COUNT) {            
-             funDigitalWrite(PWR_OFF, FUN_LOW);
+        if (pwr_down_counter++ > POWER_DOWN_COUNT) {      
+            leds_all_off();
+            funDigitalWrite(PWR_OFF, FUN_LOW);
         }
        
     }
